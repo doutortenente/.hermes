@@ -36,7 +36,7 @@
 | **Kanban + Honcho** | Tarefas e memória social | plugins + `kanban.db` | Ativos no perfil default |
 | **Cron Hermes** | Agendamentos dentro do agente | `~/.hermes/cron/` | Existe |
 | **n8n** | Automações visuais (fluxos) | container `ultron-n8n`, `:5678` | No compose Tijolão; ver `ULTRON-N8N.md` |
-| **Swarm / especialistas** | Workers tmux + perfis | `swarm.yaml` | **Workers vazios** (`workers: []`); `AGENTS.md` descreve frota antiga — doc a realinhar na Fase 1 |
+| **Swarm / especialistas** | Workers tmux + perfis | `~/.config/hermes-stack/swarm.yaml` | **Workers vazios** (`workers: []`) — intencional; `AGENTS.md` = referência |
 
 Referência operacional: [`kanban/attachments/t_26f5109e/hermes-workspace-relatorio.md`](../kanban/attachments/t_26f5109e/hermes-workspace-relatorio.md), skill `hermes-workspace`.
 
@@ -100,20 +100,21 @@ flowchart TB
 ### Fase 0 — Alinhamento (este documento)
 
 - [x] Blueprint ULTRON escrito
-- [ ] Você valida prioridade: **n8n primeiro** vs **reativar swarm/chefe-residente** vs **fluxos clínicos**
+- [x] Infra estável (health script verde; ver `plans/ULTRON-OPERACIONAL.md`)
 
-### Fase 1 — “Um cérebro, uma sala de comando” (já ~80%)
+### Fase 1 — “Um cérebro, uma sala de comando”
 
 **Entregável:** checklist verde repetível.
 
 ```bash
+tijolao health
+# ou ~/.config/hermes-stack/scripts/ultron-health.sh
 curl -fsS http://127.0.0.1:8642/health
 curl -fsS http://127.0.0.1:9119/api/status
 curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/
-# Telegram: mensagem teste + resposta
 ```
 
-**Ajustes doc:** realinhar `AGENTS.md` ↔ `swarm.yaml` (workers vazios).
+- [x] `AGENTS.md` ↔ `swarm.yaml` (workers vazios documentados)
 
 ### Fase 2 — n8n no stack Tijolão
 
@@ -124,7 +125,7 @@ curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/
 - [x] `tijolao` atualizado (status / logs / health n8n)
 - [x] `N8N_ENCRYPTION_KEY` via `~/.local/state/n8n/stack.env` (tijolao) + container **healthy**
 - [x] Workflow **ULTRON — teste webhook** importado/ativo; `POST /webhook/ultron-test` → HTTP 200
-- [x] Workflow hook **ultron-hermes** importado/ativo (aguarda `hooks.outbound` no Hermes, opcional)
+- [x] Workflow hook **ultron-hermes** importado/ativo (`ultron-n8n-session-end` no Hermes)
 - [x] Script [`scripts/ultron-n8n-bootstrap.sh`](file:///home/dr/.config/hermes-stack/scripts/ultron-n8n-bootstrap.sh)
 
 **Prova:**
@@ -146,28 +147,37 @@ curl -fsS -X POST http://127.0.0.1:5678/webhook/ultron-test -H 'Content-Type: ap
 
 - [x] [`SOUL.md`](file:///home/dr/.hermes/SOUL.md) §9 ULTRON + [`memories/`](file:///home/dr/.hermes/memories/) USER/MEMORY
 
+### Fase 5 — Especialistas (opcional, off)
+
+Recriar workers em `~/.config/hermes-stack/swarm.yaml` + `~/.hermes/profiles/<id>/` conforme `AGENTS.md`, **só** se Swarm tmux ou wrappers forem prioridade.
+
+### Fase 6 — Higiene config (01-nov-2026)
+
+- [x] Guia `plans/ULTRON-OPERACIONAL.md` (mapa de caminhos + fila)
+- [x] `README.md` em `~/.config/hermes-stack`
+- [x] Compose sem warnings (`compose.env` + `tijolao`)
+- [x] Doc n8n alinhada ao hook ativo
+- [ ] Commit git local `hermes-stack` (quando você mandar)
+- [ ] n8n: nós úteis no workflow hook **ou** desligar hook até lá
+
 ### Operação estável
 
 Rodar após restart ou update:
 
 ```bash
-~/.config/hermes-stack/scripts/ultron-health.sh
+tijolao health
 tijolao status
 ```
 
 Telegram pode levar ~30s após restart do `hermes-agent` até `gateway_state` = `connected`.
 
-### Fase 5 — Especialistas (opcional, pós-estável)
-
-Recriar workers em `swarm.yaml` + `~/.hermes/profiles/<id>/` conforme `AGENTS.md`, **só** se Swarm tmux ou wrappers forem prioridade.
-
 ---
 
-## 6. Próximo passo imediato recomendado
+## 6. Próximo passo (config, não produto)
 
-**Decisão única:** Fase 2 (subir n8n no compose) **ou** Fase 1 (fechar doc swarm + um fluxo kanban/cron “ULTRON”).
+Operação do dia a dia: **`tijolao health`** + doc **`plans/ULTRON-OPERACIONAL.md`** §7 (fila restante).
 
-Quando você disser qual, implementamos no repo `~/.config/hermes-stack/` (compose + README curto), **sem** tocar nas três restrições acima.
+Melhoria técnica pendiente principal: **workflow n8n `ultron-hermes`** — hoje só normaliza evento; você define o que ele faz, ou remove `hooks.outbound` até existir rotina.
 
 ---
 

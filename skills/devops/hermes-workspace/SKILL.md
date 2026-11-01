@@ -24,7 +24,7 @@ Interface web externa (não-oficial, fork do usuário) que já roda como contain
 | hermes-agent | `/opt/hermes` | gateway/Telegram: `/opt/data` (s6 run faz `cd /opt/data`, HOME=/opt/data; `terminal.cwd: "."` vira HOME em gateway/run.py). CLI via docker exec: `/opt/hermes` |
 
 - `/opt/data` = volume anônimo (`/var/lib/docker/volumes/197f05…/_data`): só root abre no host; o workspace NÃO monta → arquivo criado pelo Telegram com caminho relativo some da vista.
-- Mounts do workspace: src (rw), .hermes (rw), .agents/skills (ro), .local/bin (ro), swarm.yaml (ro), /tmp/tmux-1000.
+- Mounts do workspace (medir com `docker inspect hermes-workspace`): `src`, `.hermes`, `.local/bin` (ro), `~/.config/hermes-stack/swarm.yaml` → `/app/swarm.yaml`, `~/.local/state/tmux-swarm` (socket tmux host↔container).
 - Medir: `docker inspect <c> --format '{{.Config.WorkingDir}}'` e `readlink /proc/<pid>/cwd`.
 
 ## Saúde em um comando (no host via ponte SSH)

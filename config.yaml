@@ -354,6 +354,8 @@ session_reset:
   idle_minutes: 1440
   mode: none
 sessions:
+  auto_prune: true
+  retention_days: 90
   vacuum_after_prune: true
 plugins:
   enabled:

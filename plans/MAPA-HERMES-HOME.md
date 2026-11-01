@@ -63,6 +63,7 @@ O que **não** era oficial e já saiu: `.local/state/hermes/` (nest vazio), `.he
 |---------|----------|
 | `plans/MAPA-HERMES-HOME.md` | Este índice |
 | `plans/ULTRON.md` | Norte do projeto ULTRON |
+| `plans/ULTRON-OPERACIONAL.md` | Guia operacional (caminhos, saúde, fila config) |
 | `plans/REPO-ULTRON-HERMES.md` | Repo público |
 | `plans/reference/` | Inventários e auditorias (SASI v3, MCP-AUDIT, …) |
 | `plans/archive/` | Planos executados, relatórios, auditoria Tijolão |
@@ -126,7 +127,7 @@ https://github.com/doutortenente/ultron-hermes — subset versionável; **`memor
 ```bash
 hermes doctor
 curl -fsS http://127.0.0.1:8642/health
-~/.config/hermes-stack/scripts/ultron-health.sh
+tijolao health
 ```
 
 Manutenção pesada: skill `hermes-runtime-maintenance` (sem tocar em `installs/` até você mandar).
