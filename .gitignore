@@ -101,6 +101,13 @@ cron/
 tui-theme-boot.json
 web-ui-build-stamp.json
 shell-hooks-allowlist.json
+processes.json
+
+# Criados pelo Hermes Desktop e plugins (nov/2026)
+attachments/
+composer-pastes/
+disk-cleanup/
+honcho.json
 
 # Misc DBs
 shared-state.db

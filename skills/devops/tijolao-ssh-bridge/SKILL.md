@@ -1,6 +1,6 @@
 ---
 name: tijolao-ssh-bridge
-description: "Use quando o Hermes precisar operar o PC host via SSH."
+description: "Use quando o Hermes operar o host via SSH."
 ---
 
 # Ponte SSH container → host (Tijolão)
@@ -87,10 +87,19 @@ Chaves com espaço/aspas: concatenar strings, não f-string tripla (quebra quand
 ## Mapa do stack (verificar no compose antes de afirmar)
 
 - Fonte da verdade do layout: `~/.config/hermes-stack/docker-compose.tijolao.yml` (arquivo próprio, não override do upstream; sobe via wrapper `tijolao` com --env-file do cofre).
-- 2 serviços: `hermes-agent` (gateway 8642 + dashboard 9119 como processos FILHOS do mesmo container, via `HERMES_DASHBOARD=1` — não são 2 containers) e `hermes-workspace` (UI web na 3000, `depends_on` agente healthy).
+- 3 serviços no compose `hermes`: `hermes-agent` (gateway 8642 + dashboard 9119 como processos FILHOS do mesmo container, via `HERMES_DASHBOARD=1` — não são 2 containers), `hermes-workspace` (UI web na 3000, `depends_on` agente healthy) e `n8n` (container `ultron-n8n`).
 - Tudo `network_mode: host` e bind mount de `~/.hermes`, `~/src` e cofre — portas e caminhos aparecem iguais no host e nos containers.
-- Terceiro container possível: `dagger-engine-v*` (motor do `container-use`/`cu`), alheio ao stack Hermes.
+- Container alheio ao stack: `dagger-engine-v*` (motor do `container-use`/`cu`).
 - Ao perguntar "o que é X / onde roda X": ler o compose e `docker inspect --format '{{.Config.Env}}'`, nunca chutar a partir do `ps`.
+- **`~/.local/share/n8n` NÃO é o banco vivo.** O volume do container é `/home/dr/.local/state/n8n:/home/node/.n8n`. Banco, `config` (encryptionKey) e `stack.env` estão em `~/.local/state/n8n`. A pasta em `share/` é resíduo.
+- **n8n no ar ≠ chave de API.** Dono sem e-mail/senha deixa a API em 401 (`X-N8N-API-KEY` exigido) e `user_api_keys` vazia. Webhook ativo (`/webhook/<path>`) funciona sem essa chave. `encryptionKey` em `config` cifra credenciais salvas — não autentica cliente.
+- **Pedido de dado de conexão: mostrar o valor, não esconder.** Quando ele pede URL, porta, chave ou token pra ligar outro programa, imprimir o valor lido. Não apagar o arquivo de config inteiro pra cumprir isso — tirar só a linha que censura.
+- **Nunca forjar JWT no sqlite do n8n.** A API valida assinatura (`iss=n8n`, `aud=public-api` ou `aud=mcp-server-api`) e a chave forjada quebra no upgrade e some no undo. A chave nasce pela rota do próprio n8n, logado como dono.
+- **Na 2.x o MCP já vem ligado.** Desligar de vez = `N8N_DISABLED_MODULES=mcp`. A flag antiga `N8N_ENABLED_MODULES=mcp` era da 1.x e não é o que liga o acesso. O acesso só vale com o par no compose: `N8N_MCP_MANAGED_BY_ENV=true` junto de `N8N_MCP_ACCESS_ENABLED=true` (desde 2.20). Sozinha, a segunda é ignorada. Com o par, a tela correspondente fica somente leitura e o valor reaplica na subida. Recriar: `docker compose up -d --no-deps --force-recreate n8n` — `restart` herda o env antigo.
+- **A chave MCP nasce em `POST /rest/mcp/api-key/rotate`, com cookie de dono.** A documentação pública só descreve a tela; o controlador desta versão devolve a chave inteira nessa rota. Login: `POST /rest/login` com `emailOrLdapLoginId` + `password`. Dono gerido por env: `N8N_INSTANCE_OWNER_MANAGED_BY_ENV`, `EMAIL`, `FIRST_NAME`, `LAST_NAME`, `PASSWORD_HASH` (bcrypt). A chave pública da API (`X-N8N-API-KEY`) não substitui o Bearer do MCP.
+- **Endereço do Claude = o hostname da Cloudflare, nunca o da Tailscale.** O túnel da Cloudflare roda por token (`cloudflared tunnel run --token-file`), sem `config.yml` local, e publica `https://n8n.nagaitaltda.com`. A Tailscale na 8443 é legado do `WEBHOOK_URL` e do `tailscale serve` — dois túneis no mesmo n8n não são duplicata, não apagar um por existir o outro. `Unauthorized: Authorization header not sent` nesse endereço prova que ele está no ar e que o navegador abriu sem chave; não é página. Cliente: `Authorization: Bearer <chave>` em `https://n8n.nagaitaltda.com/mcp-server/http`. Prova: initialize devolve `n8n MCP Server`.
+- **Apagar fluxo na 2.x: desativar, arquivar, depois DELETE.** `DELETE /rest/workflows/{id}` num fluxo publicado devolve 409. `deactivate` sozinho continua 409 por alguns segundos; `POST .../archive` libera o `DELETE`. A CLI `n8n --help` não tem delete.
+- **Arquivo de trabalho não fica no volume do serviço.** O bind `/home/dr/.local/state/n8n:/home/node/.n8n` é a pasta de dados do n8n. Escrever chave, dump ou rascunho ali (ou em `/tmp` do container, que some no recreate) mistura lixo com o banco. Gravar fora, em `~/.local/state/`, e apagar a cópia de dentro antes de encerrar. `docker cp` pra um caminho já montado não é a via — escrever no path do host direto.
 
 ## Armadilhas
 

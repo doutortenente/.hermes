@@ -20,6 +20,8 @@ Documento único: **o que é**, **onde fica no disco**, **estado medido**, **com
 
 **Código UI:** `~/src/hermes-workspace` (branch `tijolao`). Caminho morto: `~/src/tijolao-ai/hermes-stack` (reorg out/2026 → XDG).
 
+**Projetos novos (Claude Code toolkit):** `~/Development/` + `~/.claude/commands/novo-projeto.md` — ver **`~/Development/README-toolkit-tijolao.md`**. Não misturar com `~/src/` nem `~/.hermes`.
+
 ---
 
 ## 2. Mapa de caminhos
@@ -160,18 +162,9 @@ Execute **quando quiser**, nesta ordem:
 
 - Workflows versionados: `~/.config/hermes-stack/n8n/workflows/`
 - Bootstrap: `scripts/ultron-n8n-bootstrap.sh`
-- Hook ativo em `config.yaml`:
+- **Hook Hermes → n8n:** **desligado** (01-nov-2026) — removido de `config.yaml`. Snippet comentado em `n8n/hooks.ultron.example.yaml`.
 
-```yaml
-hooks:
-  outbound:
-    - name: ultron-n8n-session-end
-      url: http://127.0.0.1:5678/webhook/ultron-hermes
-      events: [on_session_end]
-      timeout: 10
-```
-
-Payload: doc Hermes [hooks](https://github.com/nousresearch/hermes-agent/blob/main/website/docs/user-guide/features/hooks.md) (`hook_event_name`, `session_id`, `delivery_id`, …).
+Payload (se reativar): doc Hermes [hooks](https://github.com/nousresearch/hermes-agent/blob/main/website/docs/user-guide/features/hooks.md).
 
 **URL pública n8n (Tailscale funnel):** definida no compose como `WEBHOOK_URL` — ver `ULTRON-N8N.md`. Uso local: `127.0.0.1:5678`.
 

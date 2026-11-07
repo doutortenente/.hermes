@@ -46,7 +46,7 @@ docker ps --filter name=hermes-workspace --format '{{.Status}}'
 - **"hermes workspace" não é comando do CLI** — hermes workspace é este projeto externo; o built-in do Hermes é `hermes dashboard` (9119).
 - **NÃO citado na doc oficial do Hermes** = projeto não-oficial, mas funcional e já integrado no ambiente.
 - **Acesso do iPhone exige a tailnet ligada** (aparelho ficava offline dias — sem tailnet, o URL não abre).
-- **Credenciais só no cofre** — nunca imprimir em chat.
+- **Credenciais no cofre.** Quando ele pedir, imprimir no chat. Não esconder. Uma nota antiga de memória não anula o pedido da conversa.
 - **`/api/memory` (rota legada) dá 404 do agente** — inofensivo: a tela de Memória usa `/api/memory/list` e `/read?path=memories/MEMORY.md`. Prova funcional = `/api/connection-status` dar "enhanced".
 - **`/api/health` do workspace** responde HTML (SPA); para versão usar endpoints do dashboard/gateway.
 

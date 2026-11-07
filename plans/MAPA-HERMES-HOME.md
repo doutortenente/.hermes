@@ -23,6 +23,8 @@ Fonte: doc Hermes (SOUL em `~/.hermes/SOUL.md` só) + `skills/devops/hermes-runt
 | `.skills_prompt_snapshot.json`, `shell-hooks-allowlist.json` | Não | Skills / hooks |
 | `tui-theme-boot.json`, `web-ui-build-stamp.json`, `.update_check`, `install_id` | Não | UI / updates |
 | Locks (`.mcp-discovery.lock`, `.env.lock`, …) | Não | Processo vivo |
+| `honcho.json` | Não | Config do plugin de memória Honcho (`memory.provider: honcho`) |
+| `processes.json` | Não | Registro de processos em segundo plano do agente |
 
 Logs oficiais ficam em **`logs/`** (não na raiz).
 
@@ -51,8 +53,8 @@ O que **não** era oficial e já saiu: `.local/state/hermes/` (nest vazio), `.he
 | Planos, auditorias, inventários | `plans/` (ativos), `plans/reference/` (inventários longos), `plans/archive/` (histórico) | `cache/auditoria-tijolao/` (movido), `skills/sasi_v3_inventory.md` → `plans/reference/sasi-v3-inventory.md` |
 | Memória longa do agente | `memories/` (`USER.md`, `MEMORY.md`) | `pastes/`, `plans/` |
 | Código / repos | `~/src` (host) | `~/.hermes/workspace/` (só mesa + JSON da UI workspace) |
-| Skills tuas | `skills/devops/` (Tijolão + SASI + harness-insights), `skills/productivity/` (ex.: mestre-airtable, i-have-adhd) | `software-development/sasi-*` → **`skills/devops/sasi-*`**; `mestre-zed` → **`skills/devops/mestre-zed`** |
-| Backups de config | `backups/config/` (2 `.good` recentes; resto em `backups/config/archive/`) | Raiz, `cache/` |
+| Skills tuas | `skills/devops/` (Tijolão, harness-insights, mestre-zed, …), `skills/productivity/` (ex.: mestre-airtable, i-have-adhd) | `software-development/sasi-*` → **`skills/devops/sasi-*`** (se existirem no disco); `mestre-zed` → **`skills/devops/mestre-zed`** |
+| Backups de config | `backups/config/` — o Hermes guarda sozinho os 5 `.good` mais novos e apaga os velhos (`DEFAULT_KEEP = 5` em `hermes_cli/config_backups.py`). **Não podar à mão**: o que vai pra subpasta o Hermes nunca mais limpa | Raiz, `cache/` |
 | Clipboard do agente | `pastes/` — **apagar** dumps de `.env`/senhas na hora | Nunca versionar |
 
 **`workspace/`** — deixar: `knowledge-config.json`, `mcp-presets.json`, `mcp-hub-sources.json`, `cache/mcp-tools.json` (hermes-workspace lê daqui).
@@ -65,7 +67,7 @@ O que **não** era oficial e já saiu: `.local/state/hermes/` (nest vazio), `.he
 | `plans/ULTRON.md` | Norte do projeto ULTRON |
 | `plans/ULTRON-OPERACIONAL.md` | Guia operacional (caminhos, saúde, fila config) |
 | `plans/REPO-ULTRON-HERMES.md` | Repo público |
-| `plans/reference/` | Inventários e auditorias (SASI v3, MCP-AUDIT, …) |
+| `plans/reference/` | Inventários e auditorias (SASI v3, MCP-AUDIT, …). Toolkit Claude: **`~/Development/README-toolkit-tijolao.md`** (não em `plans/`) |
 | `plans/archive/` | Planos executados, relatórios, auditoria Tijolão |
 
 **`kanban/attachments/`** — anexos de tarefa; cópia de relatório também em `plans/archive/` quando for documento teu.
@@ -76,7 +78,11 @@ O que **não** era oficial e já saiu: `.local/state/hermes/` (nest vazio), `.he
 
 `sessions/`, `logs/`, `cache/` (só cache regenerável — **não** docs), `state/`, `cron/`, `runtime/`, `pending*`, `gateway/`, `hooks/`, `platforms/`, `home/` (HOME falso — **nunca apagar**), `bin/`, `tools/`, `plugins/`, `skills/` (bundled + tuas), `mcp-tokens/`, `vault/`, `shared/`, `kanban/`, `webui-mvp/`, `installs/`, caches (`audio_cache/`, `image_cache/`, …), `backups/`, `.curator_backups/`.
 
-Não existe pasta `scripts/` no momento (Hermes recria se precisar). `profiles/` vazio é ok.
+Desde nov/2026 (runtime, não mexer): `attachments/` e `composer-pastes/` (o Hermes Desktop grava o mesmo paste nas duas), `disk-cleanup/` (plugin disk-cleanup). `plugins/honcho` = memória; `plugins/hermes-honcho-plugin` = tela do Desktop que lê essa memória — não são duplicados.
+
+`scripts/` — vazia (runtime Hermes não usa mais bridge WhatsApp aqui; scripts de infra ficam em `~/src/scripts/`). Não misturar com `~/.config/hermes-stack/scripts/` (Docker). `profiles/` vazio é ok.
+
+Ledger respawn-storm do gateway: `logs/gateway-starts.log` (patch local `gateway-starts-log-path.patch` — upstream grava na raiz; **sem** symlink na raiz).
 
 ---
 
@@ -91,20 +97,22 @@ Não existe pasta `scripts/` no momento (Hermes recria se precisar). `profiles/`
 | Paste com **senhas/tokens** em `pastes/` | **Apagado** — usar só cofre `.env` |
 | Nota npm container em paste | → `plans/archive/container-npm-audit-2026.txt` |
 | `mestre-zed` em `development/` | → `skills/devops/mestre-zed` |
-| SASI + harness em `software-development/` | → `skills/devops/sasi-cockpit-pipeline`, `sasi-schema-planning`, `harness-insights` |
+| SASI + harness em `software-development/` | → `skills/.archive/` (`sasi-cockpit-pipeline`, `sasi-schema-planning`); `harness-insights` em `skills/devops/` |
 | `i-have-adhd` solto em `skills/` | → `skills/productivity/i-have-adhd` |
 | 5 backups `config.yaml.good` no mesmo dia | 2 ativos + resto em `backups/config/archive/` |
 
 **2ª passagem (29-out, tarde):** `plugins/hermes-honcho-plugin/docs/`, `kanban/attachments/`, `skills/*` por categoria, `workspace/*.json`, `state/*`, raiz runtime — **lugar correto; sem movimentação.**
 
-**3ª passagem (29-out, noite):** skills custom **Nícholas/SASI** estavam em `software-development/` → movidas para `skills/devops/` (`sasi-cockpit-pipeline`, `sasi-schema-planning`, `harness-insights`). Restante de `~/.hermes` varrido (cache UV/npm, `home/` fake HOME, `logs/curator/REPORT.md` = runtime Hermes) — **sem mais realocação**.
+**3ª passagem (29-out, noite):** skills SASI foram para `skills/devops/` e depois **arquivadas** em `skills/.archive/` (cockpit + schema); `harness-insights` permanece em `skills/devops/`. Restante varrido — **sem mais realocação**.
+
+**4ª passagem (01-nov-2026):** `gateway-starts.log` — ledger em `logs/` via patch `~/.config/hermes-stack/hermes-agent/patches/gateway-starts-log-path.patch` (sem arquivo/symlink na raiz). Cinco `config.yaml.good` do mesmo dia → **2** em `backups/config/`, três mais antigos em `backups/config/archive/`. `~/.config/hermes-stack` conferido — só receita Docker (nada a mover para `~/.hermes`). `desktop-plugins/hermes-honcho-plugin/` = artefato de build (fonte em `plugins/hermes-honcho-plugin/`) — **não mover**. Resto do tree alinhado ao mapa — **sem realocação adicional**.
 
 ### Veredicto por pasta (fim da auditoria)
 
 | Pasta | Veredicto |
 |-------|-----------|
 | `plans/` | Organizado (ativos / reference / archive) |
-| `skills/devops/` | **Todas** skills custom Tijolão + SASI + harness |
+| `skills/devops/` | **Todas** skills custom Tijolão + harness (+ SASI no doc se readicionadas) |
 | `skills/productivity/` | Custom: mestre-airtable, i-have-adhd (+ bundled) |
 | `skills/*` (outras categorias) | Bundled Hub — não mover |
 | `memories/`, `SOUL.md`, `config.yaml` | Identidade — raiz ou memories |
