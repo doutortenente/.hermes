@@ -1,11 +1,13 @@
-# ~/.hermes — política: versionar a árvore por padrão; negar só o que não pode ir ao GitHub público.
-# Motivos: segredo | cache regenerável | sqlite/sessão | arquivo grande demais para o GitHub | runtime efêmero
+# Hermes profile distribution ignore.
+# https://hermes-agent.nousresearch.com/docs/user-guide/profile-distributions
+# Credentials, user data, and runtime never belong in the public repo.
+# Authored content that stays tracked: SOUL.md, config.yaml, skills/, README.md.
 
-# --- Segredo ---
+# Credentials & secrets — NEVER commit
+auth.json
 .env
 .env.*
 !.env.example
-auth.json
 auth.lock
 **/nous_auth.json
 **/nous_auth.lock
@@ -20,80 +22,103 @@ id_rsa.*
 id_ed25519
 id_ed25519.*
 .ssh/
-home/
 
-# --- SQLite / sessão / estado de conversa ---
+# Runtime databases & state
 *.db
 *.db-shm
 *.db-wal
 *.db.dispatch.lock
 *.db.init.lock
-shared-state.db*
-response_store.db*
-runs_idempotency.db*
-projects.db*
-verification_evidence.db*
-state.db*
+gateway.pid
+gateway.lock
+gateway.sock
+gateway_state.json
+processes.json
+spawn-ledger.json
+channel_directory.json
+active_profile
+.update_check
+install_id
+.restart_last_processed.json
+.mcp-discovery.lock
+.scratch_tip_shown
+.skills_prompt_snapshot.json
+telegram_update_receipts_*.json
+tasks.json
+honcho.json
+shell-hooks-allowlist.json
+tui-theme-boot.json
+web-ui-build-stamp.json
 
-# --- Cache regenerável ---
+# User data — NEVER commit
+memories/
+sessions/
+logs/
+plans/
+workspace/
+home/
+plugins/
+desktop-plugins/
+
+# Caches & generated artifacts
+image_cache/
+audio_cache/
+document_cache/
+browser_screenshots/
 cache/
 .cache/
 .curator_backups/
-audio_cache/
-image_cache/
-installs/
-tools/
 models_dev_cache.json
 models_dev_cache.etag
 provider_models_cache.json
 context_length_cache.yaml
 plugin-update-checks/
 
-# --- Runtime / locks / sockets (efêmero) ---
+# Infrastructure
+hermes-agent/
+.worktrees/
+profiles/
+bin/
+node_modules/
+local/
+tools/
+installs/
+
+# Checkpoints & backups
+checkpoints/
+sandboxes/
+backups/
+state-snapshots/
+
+# Logs
+errors.log
+.hermes_history
+interrupt_debug.log
+
+# Distribution-authored scheduler/skills state only
+cron/*
+!cron/jobs.json
+skills/.*
+skills/**/.curator_backups/
+skills/**/.locks/
+skills/**/.bundled_manifest*
+skills/**/.curator_ledger.jsonl
+skills/**/.curator_state
+
+# Live process / ephemeral dirs
 *.sock
 *.wal
 *.shm
 *.pid
-gateway.sock
-gateway.pid
-gateway.lock
-gateway_state.json
-gateway-starts.log
-spawn-ledger.json
-channel_directory.json
-.hermes_history
-.mcp-discovery.lock
-.scratch_tip_shown
-install_id
-.restart_last_processed.json
-interrupt_debug.log
-.skills_prompt_snapshot.json
-telegram_update_receipts_*.json
-tasks.json
-honcho.json
-.update_check
-tui-theme-boot.json
-web-ui-build-stamp.json
-shell-hooks-allowlist.json
-processes.json
-memories/*.lock
-plugins/.install-metadata.json.lock
-sessions/
 runtime/
 pending/
 pending_messages/
-sandboxes/
 pairing/
 proxy/
 platforms/
 terminal-sessions/
-cron/
 state/
 kanban/
-workspace/
-backups/
-state-snapshots/
-logs/
 attachments/
 composer-pastes/
 disk-cleanup/
@@ -106,32 +131,14 @@ assets/
 skins/
 photon/
 webui-mvp/
-bin/
 gateway/
 desktop/
-pending_messages/
-
-# Skills — estado interno do hub/curator (fonte das skills é versionável)
-skills/**/.curator_backups/
-skills/**/.locks/
-skills/.usage.json
-skills/.usage.json.lock
-skills/**/.bundled_manifest*
-skills/**/.curator_ledger.jsonl
-skills/**/.curator_state
-
-# Plugins — não publicar .env aninhado nem metadados .git (evitar gitlink/submódulo)
-plugins/**/.env
-plugins/**/.env.*
-!plugins/**/.env.example
-desktop-plugins/**/.env
-desktop-plugins/**/.env.*
+hooks/
+scripts/
+shared/
 **/.git/
 
-# Privado / clínico (fora do ULTRON público)
-profiles/
-
-# Editor / lixo
+# Editor
 .DS_Store
 *~
 .cursor/

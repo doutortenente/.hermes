@@ -70,7 +70,7 @@ tool_loop_guardrails:
     same_tool_failure: 8
     idempotent_no_progress: 5
 compression:
-  enabled: false
+  enabled: true
   progress_notices: false
   threshold: 0.5
   target_ratio: 0.2
@@ -172,14 +172,8 @@ platforms:
   whatsapp:
     enabled: false
 approvals:
-  mode: false
-  destructive_slash_confirm: false
-command_allowlist:
-  - recursive delete
-  - script execution via -e/-c flag
-  - overwrite system file via redirection
-  - execute_code
-  - pipe remote content to shell
+  mode: smart
+  destructive_slash_confirm: true
 kanban:
   review_dispatch: true
 code_execution:
@@ -363,4 +357,4 @@ plugins:
     - office-desk
   disabled: []
 security:
-  redact_secrets: false
+  redact_secrets: true

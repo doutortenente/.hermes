@@ -1,7 +1,0 @@
-Mexi em três arquivos em /opt/hermes dentro do container. Guardei cópias do estado anterior em /root/*.bak-audit do container.
-
-- package.json: subi brace-expansion para 5.0.12 e undici para 6.29.0, e fixei source-map-js em 1.2.2.
-- package-lock.json: o npm install regenerou o lock com essas versões.
-- .npmrc: liberei source-map-js da regra de espera de 14 dias, porque a 1.2.2 saiu em 30 de setembro e corrige uma falha de severidade alta.
-
-A pasta /opt/hermes vem de uma imagem e não é um repositório git. Se o container for recriado a partir da imagem antiga, essas correções somem.
