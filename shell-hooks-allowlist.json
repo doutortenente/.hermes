@@ -1,0 +1,29 @@
+{
+  "approvals": [
+    {
+      "event": "pre_llm_call",
+      "command": "command -v curl >/dev/null 2>&1 && curl -s --connect-timeout 1 --max-time 2 \"http://localhost:2208/api/notify?type=working&sessionId=$NINE_REMOTE_SESSION_ID&tool=hermes\" > /dev/null 2>&1 & true",
+      "approved_at": "2020-01-01T00:00:00Z"
+    },
+    {
+      "event": "pre_tool_call",
+      "command": "command -v curl >/dev/null 2>&1 && curl -s --connect-timeout 1 --max-time 2 \"http://localhost:2208/api/notify?type=working&sessionId=$NINE_REMOTE_SESSION_ID&tool=hermes\" > /dev/null 2>&1 & true",
+      "approved_at": "2020-01-01T00:00:00Z"
+    },
+    {
+      "event": "post_tool_call",
+      "command": "command -v curl >/dev/null 2>&1 && curl -s --connect-timeout 1 --max-time 2 \"http://localhost:2208/api/notify?type=working&sessionId=$NINE_REMOTE_SESSION_ID&tool=hermes\" > /dev/null 2>&1 & true",
+      "approved_at": "2020-01-01T00:00:00Z"
+    },
+    {
+      "event": "pre_approval_request",
+      "command": "command -v curl >/dev/null 2>&1 && curl -s --connect-timeout 1 --max-time 2 \"http://localhost:2208/api/notify?type=blocked&sessionId=$NINE_REMOTE_SESSION_ID&tool=hermes\" > /dev/null 2>&1 & true",
+      "approved_at": "2020-01-01T00:00:00Z"
+    },
+    {
+      "event": "post_llm_call",
+      "command": "command -v curl >/dev/null 2>&1 && curl -s --connect-timeout 1 --max-time 2 \"http://localhost:2208/api/notify?type=done&sessionId=$NINE_REMOTE_SESSION_ID&tool=hermes\" > /dev/null 2>&1 & true",
+      "approved_at": "2020-01-01T00:00:00Z"
+    }
+  ]
+}

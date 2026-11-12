@@ -268,7 +268,6 @@ mcp_servers:
       - -y
       - "@modelcontextprotocol/server-postgres"
       - ${POSTGRES_MCP_DSN}
-    enabled: false
   context7:
     command: /home/dr/.hermes/home/.local/bin/context7-mcp
     args: []

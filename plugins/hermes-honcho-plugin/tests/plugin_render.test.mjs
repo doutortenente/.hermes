@@ -1,0 +1,655 @@
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import test from 'node:test'
+import vm from 'node:vm'
+
+// Evaluate the real uncompiled plugin with host/React bindings stubbed at the
+// module boundary. No additional runtime packages.
+const source = await readFile(new URL('../desktop/plugin.js', import.meta.url), 'utf8')
+const element = (type, props) => ({ type, props })
+const sdkStubs = Object.fromEntries([
+  'Button', 'Codicon', 'CopyButton', 'Dialog', 'DialogContent', 'DialogDescription', 'DialogFooter', 'DialogHeader',
+  'DialogTitle', 'DisclosureCaret', 'DropdownMenu', 'DropdownMenuContent', 'DropdownMenuItem', 'DropdownMenuTrigger',
+  'MessageTextContent', 'PanelEmpty', 'SearchField', 'SegmentedControl', 'Select', 'SelectContent', 'SelectItem', 'SelectTrigger', 'SelectValue',
+  'Skeleton', 'StatusDot', 'Textarea', 'Tip'
+].map(name => [name, name]))
+const sandbox = vm.createContext({
+  ...sdkStubs,
+  atom: value => ({ get: () => value, set() {} }),
+  createContext: value => ({ value }),
+  cn: (...parts) => parts.filter(Boolean).join(' '),
+  icons: new Proxy({}, { get: (_, name) => `icon:${String(name)}` }),
+  jsx: element,
+  jsxs: element,
+})
+vm.runInContext(
+  source.replace(/import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]+['"]/g, '').replace('export default', 'const plugin ='),
+  sandbox
+)
+
+// Expand pure function components so assertions read what a user would see.
+function renderedText(node) {
+  if (node === null || node === undefined || typeof node === 'boolean') return ''
+  if (Array.isArray(node)) return node.map(renderedText).join(' ')
+  if (typeof node === 'object') {
+    if (typeof node.type === 'function' && ['MetaLine', 'StateLine', 'RegionHeading'].includes(node.type.name)) return renderedText(node.type(node.props))
+    return renderedText(node.props?.children)
+  }
+  return String(node)
+}
+
+const conclusion = {
+  id: 'fixture-conclusion', observer_id: 'agent', observed_id: 'human', content: 'Fixture fact.',
+  level: 'deductive', source_session_id: 'fixture-session', belongs_to_current_session: true, created_at: '2026-01-01T00:00:00Z',
+}
+const uploadTarget = { workspace_id: 'fixture-workspace', session_id: 'fixture-session', peer_id: 'fixture-user' }
+const uploadSnapshot = { data: { ok: true, profile: 'research', chat: { found: true, honcho_session_id: 'fixture-session' }, config: { workspace_id: 'fixture-workspace', user_peer: 'fixture-user' } } }
+
+function setLiveFocus(overrides = {}) {
+  const values = { profile: 'remote-alias', focusedSessionProfile: 'remote-alias', connectionId: 'fixture-ssh', focusedSessionOwner: { connectionId: 'fixture-ssh', profile: 'remote-alias' }, focusedSessionId: 'fixture-runtime', focusedStoredSessionId: 'fixture-stored', cwd: '/srv/fixture', busy: false, awaitingResponse: false, ...overrides }
+  sandbox.host ||= {}
+  sandbox.host.state = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { get: () => value }]))
+  sandbox.useValue = atom => atom.get()
+  return sandbox.useFocusScope()
+}
+
+function useTransport(handler = async () => ({ ok: true })) {
+  const calls = []
+  sandbox.transport = async (path, options) => { calls.push({ path, options }); return handler(path, options) }
+  vm.runInContext('requestPlugin = transport', sandbox)
+  return calls
+}
+
+test('memory is the landing section and operational status is secondary', () => {
+  assert.equal(vm.runInContext('$activeTab.get()', sandbox), 'memory')
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(SECTIONS.map(section => section.id))', sandbox)), ['memory', 'ask', 'messages', 'context', 'status'])
+  assert.equal(typeof sandbox.MemorySection, 'function')
+  assert.equal(typeof sandbox.AskSection, 'function')
+})
+
+test('page and docked pane navigation target their own unique content region', () => {
+  setLiveFocus()
+  sandbox.useContext = () => 'wide'
+  sandbox.useQuery = () => ({})
+  sandbox.useEffect = () => {}
+  const ids = []
+  for (const origin of ['page', 'pane']) {
+    const page = sandbox.HonchoPage({ origin })
+    const children = page.props.children.props.children.props.children
+    const section = children.find(child => child.type === 'section')
+    const nav = children.find(child => child.type === sandbox.SectionNav)
+    const tabs = sandbox.SectionNav(nav.props).props.children
+    assert.equal(nav.props.origin, origin)
+    assert.equal(section.props.role, 'tabpanel')
+    for (const tab of tabs) {
+      assert.equal(tab.props.role, 'tab')
+      assert.equal(tab.props['aria-controls'], section.props.id)
+      ids.push(tab.props.id)
+    }
+    ids.push(section.props.id)
+  }
+  assert.equal(new Set(ids).size, ids.length)
+})
+
+test('a chat from another profile on the same connection is read in its owner profile', async () => {
+  const calls = useTransport()
+  const focus = setLiveFocus({
+    profile: 'default', focusedSessionProfile: 'research', connectionId: 'local',
+    focusedSessionOwner: { connectionId: 'local', profile: 'research' },
+  })
+  assert.equal(focus.routeMismatch, false)
+  assert.equal(focus.ownerProfile, 'research')
+  await sandbox.requestForFocus(focus, '/snapshot', { method: 'POST', body: focus.body })
+  assert.equal(calls[0].path, '/snapshot?profile=research')
+  assert.equal(calls[0].options.body.profile, 'research')
+  assert.equal(calls[0].options.body.focused_profile, 'research')
+  assert.equal(calls[0].options.body.connection_id, 'local')
+  assert.equal(calls[0].options.body.focused_connection_id, 'local')
+})
+
+test('a remote chat from another profile resolves that profile route, not the active one', async () => {
+  const calls = useTransport()
+  sandbox.queryClient = { fetchQuery: options => options.queryFn() }
+  sandbox.host.profileRoutes = async () => [
+    { connectionId: 'fixture-ssh', profile: 'alias-a', targetProfile: 'remote-a' },
+    { connectionId: 'fixture-ssh', profile: 'alias-b', targetProfile: 'remote-b' },
+  ]
+  const focus = setLiveFocus({ profile: 'alias-a', focusedSessionProfile: 'alias-b', focusedSessionOwner: { connectionId: 'fixture-ssh', profile: 'alias-b' } })
+  await sandbox.requestForFocus(focus, '/messages', { method: 'POST', body: focus.body })
+  assert.equal(calls[0].path, '/messages?profile=remote-b')
+  assert.equal(calls[0].options.body.profile, 'remote-b')
+})
+
+test('a chat on another connection stays blocked with a specific reason', async () => {
+  const calls = useTransport()
+  const focus = setLiveFocus({ profile: 'default', connectionId: 'local', focusedSessionOwner: { connectionId: 'fixture-ssh', profile: 'research' } })
+  assert.equal(focus.routeMismatch, true)
+  assert.equal(focus.blockReason, 'other_connection')
+  await assert.rejects(sandbox.requestForFocus(focus, '/snapshot', {}), /another Hermes connection/)
+  assert.equal(calls.length, 0)
+  assert.equal(sandbox.connectionStatus(focus).label, 'Other connection')
+})
+
+test('unresolved saved-session ownership fails closed instead of assuming the active profile', async () => {
+  const calls = useTransport()
+  const focus = setLiveFocus({ focusedSessionOwner: null })
+  assert.equal(focus.routeMismatch, true)
+  assert.equal(focus.blockReason, 'owner_unresolved')
+  await assert.rejects(sandbox.requestForFocus(focus, '/snapshot', {}), /paused/)
+  assert.equal(calls.length, 0)
+})
+
+test('corrections compare the confirmed target and verify the exact content', async () => {
+  const focus = setLiveFocus({ connectionId: 'local', focusedSessionOwner: { connectionId: 'local', profile: 'remote-alias' } })
+  const target = { workspace_id: 'w', session_id: 's', observer_id: 'a', observed_id: 'u' }
+  const calls = useTransport(async path => path.startsWith('/correction-ticket')
+    ? { ok: true, ticket: 'one-time', target }
+    : { ok: true, verified: true, outcome: 'verified', target, item: { id: 'new', content: 'Correction', observer_id: 'a', observed_id: 'u', source_session_id: 's' } })
+  await sandbox.saveCorrectionForFocus(focus, target, 'Correction', null)
+  assert.equal(calls.length, 2)
+  assert.equal(calls[1].options.body.ticket, 'one-time')
+  calls.length = 0
+  await assert.rejects(sandbox.saveCorrectionForFocus(focus, { ...target, session_id: 'changed' }, 'Correction', null), /target changed/i)
+  assert.equal(calls.length, 1, 'target mismatch must stop before the write')
+})
+
+test('lost correction response is unknown and cannot be retried automatically', async () => {
+  const focus = setLiveFocus({ connectionId: 'local', focusedSessionOwner: { connectionId: 'local', profile: 'remote-alias' } })
+  const target = { workspace_id: 'w', session_id: 's', observer_id: 'a', observed_id: 'u' }
+  let writes = 0
+  useTransport(async path => {
+    if (path.startsWith('/correction-ticket')) return { ok: true, ticket: 'one-time', target }
+    writes++
+    throw new Error('Transport lost')
+  })
+  await assert.rejects(sandbox.saveCorrectionForFocus(focus, target, 'Correction', null), error => error.outcome === 'unknown')
+  assert.equal(writes, 1)
+})
+
+test('conclusion rows describe premises without calling them source messages', () => {
+  const modern = renderedText(sandbox.ConclusionRow({ conclusion: { ...conclusion, source_ids: ['premise-a', 'premise-b'], times_derived: 7 } }))
+  assert.match(modern, /Fixture fact\./)
+  assert.match(modern, /Derived 7 times/)
+  assert.match(modern, /2 premises/)
+  assert.doesNotMatch(modern, /source messages/i)
+  const legacy = renderedText(sandbox.ConclusionRow({ conclusion }))
+  assert.doesNotMatch(legacy, /Derived|premise/)
+  const other = renderedText(sandbox.ConclusionRow({ conclusion: { ...conclusion, belongs_to_current_session: false } }))
+  assert.match(other, /Other session/)
+  assert.match(source, /Premises are earlier conclusions, not source messages\./)
+})
+
+// Stub hooks and expand every function component, so assertions read the
+// whole subtree a user would see.
+function withHooks(layout = 'wide') {
+  sandbox.useContext = () => layout
+  sandbox.useState = initial => [typeof initial === 'function' ? initial() : initial, () => {}]
+  sandbox.useRef = () => ({ current: null })
+  sandbox.useEffect = () => {}
+}
+function deepText(node) {
+  if (node === null || node === undefined || typeof node === 'boolean') return ''
+  if (Array.isArray(node)) return node.map(deepText).join(' ')
+  if (typeof node === 'object') return typeof node.type === 'function' ? deepText(node.type(node.props)) : deepText(node.props?.children)
+  return String(node)
+}
+const entry = (module, source, text = null, off = false) => ({ module, source, text, text_truncated: false, off })
+const instructions33 = {
+  ok: true, errors: [], capabilities: { instructions: true }, configured: true,
+  shared: entry(null, 'workspace.shared', 'Write in plain English.'),
+  agents: [
+    entry('reasoning', 'workspace.shared', 'Write in plain English.'),
+    entry('summary', 'workspace.summary', 'Keep summaries short.'),
+    entry('dialectic', 'session.dialectic', null, true),
+    entry('dream', 'workspace.shared', 'Write in plain English.'),
+    entry('peer_card', null)
+  ],
+  across_sessions: entry('dialectic', 'workspace.shared', 'Write in plain English.')
+}
+
+test('stored summaries are preferred over the budgeted preview, as Honcho selects them', () => {
+  const short = { content: 'Short.', token_count: 900 }, long = { content: 'Long.', token_count: 3600 }
+  assert.equal(sandbox.storedSummary({ short, long }), long)
+  assert.equal(sandbox.storedSummary({ short, long: { ...long, token_count: 800 } }), short)
+  assert.equal(sandbox.storedSummary({ short: null, long }), long)
+  assert.equal(sandbox.storedSummary({ short: { content: '', token_count: 4 }, long: null }), null)
+  assert.equal(sandbox.storedSummary(null), null)
+})
+
+test('a summary that does not fit names a budget floor instead of claiming there is none', () => {
+  assert.equal(sandbox.summaryBudgetFloor({ short: { content: 'x', token_count: 1500 }, long: { content: 'y', token_count: 6000 } }), 3750)
+  assert.equal(sandbox.summaryBudgetFloor({ short: { content: 'x', token_count: null }, long: null }), null)
+  assert.equal(sandbox.summaryBudgetFloor({ short: null, long: null }), null)
+  assert.equal(sandbox.summaryBudgetFloor(undefined), null)
+  assert.match(source, /Honcho has a summary, but it doesn’t fit this budget\./)
+})
+
+test('the context preview starts from Hermes\'s own cap, or the largest preview when uncapped', () => {
+  assert.equal(sandbox.contextBudgetFor(4000), 4000)
+  assert.equal(sandbox.contextBudgetFor(null), 32000)
+  assert.equal(sandbox.contextBudgetFor(0), 32000)
+  assert.equal(sandbox.contextBudgetFor(100), 256)
+  assert.equal(sandbox.contextBudgetFor(250000), 32000)
+  assert.equal(sandbox.contextBudgetFor('4000.5'), 32000)
+})
+
+test('custom instructions show each agent once, with Honcho\'s source labels', () => {
+  withHooks()
+  const rendered = deepText(sandbox.InstructionsList({ data: instructions33 }))
+  for (const label of ['Shared', 'Conclusions', 'Summaries', 'Answers', 'Dreams', 'Peer card']) assert.match(rendered, new RegExp(label))
+  assert.equal(rendered.match(/Write in plain English\./g).length, 1, 'shared text renders once')
+  assert.equal(rendered.match(/Uses the shared text/g).length, 2)
+  assert.match(rendered, /Keep summaries short\. +workspace\.summary/)
+  assert.match(rendered, /Off +session\.dialectic/)
+  assert.match(rendered, /Not set/)
+  assert.match(rendered, /Peer card instructions are added to the dream instructions\./)
+  assert.equal(sandbox.instructionsMeta(instructions33), '3 set')
+})
+
+test('custom instructions say none are set, and surface read failures', () => {
+  withHooks('narrow')
+  assert.match(deepText(sandbox.InstructionsList({ data: { ...instructions33, configured: false } })), /None set\. Honcho uses its built-in prompts\./)
+  assert.equal(sandbox.instructionsMeta({ configured: false }), 'None set')
+  const failed = sandbox.InstructionsList({ data: { ...instructions33, errors: [{ scope: 'instructions.session', message: 'Unreadable' }] } })
+  assert.equal(failed.type, sandbox.Diagnostics)
+})
+
+test('instructions stay hidden unless the backend confirms Honcho 3.3', () => {
+  withHooks()
+  const original = sandbox.useInstructions
+  try {
+    for (const data of [undefined, { capabilities: { instructions: false }, reason: 'Custom instructions need Honcho 3.3.0 or later.' }]) {
+      sandbox.useInstructions = () => ({ data })
+      assert.equal(sandbox.InstructionsRegion(), null)
+      assert.equal(sandbox.InstructionsDisclosure(), null)
+      assert.equal(sandbox.AnswerInstructions({ scope: 'session' }), null)
+    }
+  } finally {
+    sandbox.useInstructions = original
+  }
+})
+
+test('Ask names the instructions its answer follows for the chosen scope', () => {
+  withHooks()
+  const original = sandbox.useInstructions
+  try {
+    sandbox.useInstructions = () => ({ data: instructions33 })
+    assert.match(deepText(sandbox.AnswerInstructions({ scope: 'session' })), /Custom instructions are off for answers in this session\. +session\.dialectic/)
+    const across = deepText(sandbox.AnswerInstructions({ scope: 'workspace' }))
+    assert.match(across, /Answers across sessions follow custom instructions\. +workspace\.shared +Show/)
+    assert.doesNotMatch(across, /Write in plain English/, 'text stays folded until asked for')
+    sandbox.useInstructions = () => ({ data: { ...instructions33, configured: false, agents: instructions33.agents.map(item => ({ ...item, source: null, text: null, off: false })), across_sessions: entry('dialectic', null) } })
+    assert.equal(sandbox.AnswerInstructions({ scope: 'session' }), null)
+  } finally {
+    sandbox.useInstructions = original
+  }
+})
+
+test('context message readout never invents a zero token total', () => {
+  assert.equal(sandbox.contextMessageDetail({ messages: [{}], token_count: null }), '1 recent message · token total not reported')
+  assert.equal(sandbox.contextMessageDetail({ messages: [], token_count: 0 }), '0 recent messages · 0 server-reported tokens')
+})
+
+const plain = value => JSON.parse(JSON.stringify(value))
+
+test('representation parsing follows Honcho markdown and legacy formats', () => {
+  const markdown = [
+    '## Explicit Observations', '',
+    '[2026-01-11 09:14:03] Fixture walks on weekends.',
+    '[2026-01-11 09:14:03] Fixture uses `km`.',
+    '[2026-01-12 08:30:55] Fixture prints routes.', '',
+    '## Deductive Observations', '',
+    '[id:abc] [2026-01-14 12:00:10] Routes fit one page.',
+    '   Premises:',
+    '   - Fixture prints routes.', '',
+    '## Inductive Observations', '',
+    ' **Pattern** [high]: Fixture plans ahead.',
+    '   **Type**: tendency', ''
+  ].join('\n')
+  const sections = plain(sandbox.parseRepresentation(markdown))
+  assert.deepEqual(sections.map(section => [section.title, section.entries.length]), [['Explicit Observations', 3], ['Deductive Observations', 1], ['Inductive Observations', 1]])
+  assert.deepEqual(sections[0].entries[0], { stamp: '2026-01-11 09:14:03', date: '2026-01-11', time: '09:14', label: null, text: 'Fixture walks on weekends.', details: [] })
+  assert.equal(sections[1].entries[0].text, 'Routes fit one page.')
+  assert.deepEqual(sections[1].entries[0].details, ['Premises:', '- Fixture prints routes.'])
+  assert.deepEqual(sections[2].entries[0], { stamp: null, date: null, time: null, label: 'High confidence', text: 'Fixture plans ahead.', details: ['**Type**: tendency'] })
+  assert.equal(sections[0].entries[0].label, null)
+  const contradiction = plain(sandbox.parseRepresentation('## Contradictions\n\n **CONTRADICTION**: Said both A and B.\n   **Conflicting statements**:\n   - A\n'))
+  assert.deepEqual([contradiction[0].entries[0].label, contradiction[0].entries[0].text], ['Contradiction', 'Said both A and B.'])
+  // A stamped entry keeps bold text that merely starts the sentence.
+  assert.equal(plain(sandbox.parseRepresentation('[2026-01-11 09:14:03] **Pattern**: kept'))[0].entries[0].text, '**Pattern**: kept')
+  assert.equal(sandbox.sectionTitle('Explicit Observations'), 'Explicit observations')
+
+  const legacy = plain(sandbox.parseRepresentation('EXPLICIT:\n\n1. [2025-01-01 12:00:00] Has a dog\n\nDEDUCTIVE:\n\n'))
+  assert.deepEqual(legacy.map(section => [sandbox.sectionTitle(section.title), section.entries[0].time, section.entries[0].text]), [['Explicit', '12:00', 'Has a dog']])
+})
+
+test('representation parsing tolerates malformed and missing input', () => {
+  for (const value of [null, undefined, '', '\n\n']) assert.deepEqual(plain(sandbox.parseRepresentation(value)), [])
+  const prose = plain(sandbox.parseRepresentation('Free text from an older provider.\nSecond line [not a stamp].'))
+  assert.equal(prose.length, 1)
+  assert.equal(prose[0].title, null)
+  assert.deepEqual(prose[0].entries.map(entry => [entry.time, entry.text]), [[null, 'Free text from an older provider.'], [null, 'Second line [not a stamp].']])
+  assert.equal(sandbox.parseRepresentation(42)[0].entries[0].text, '42')
+})
+
+test('observation days print a time once per minute', () => {
+  sandbox.useContext = () => 'wide'
+  const entries = plain(sandbox.parseRepresentation('[2026-01-11 09:14:03] A\n[2026-01-11 09:14:59] B\n[2026-01-11 10:02:41] C'))[0].entries
+  const day = sandbox.ObservationDay({ day: { date: '2026-01-11', entries } })
+  const rows = day.props.children[1].props.children
+  assert.deepEqual(rows.map(row => row.props.children[0].type), ['time', 'span', 'time'])
+  assert.equal(rows[0].props.children[0].props.title, '2026-01-11 09:14:03')
+  assert.ok(rows[0].props.style.gridTemplateColumns, 'runtime layout must not depend on generated Tailwind classes')
+  assert.equal(day.props.children[0].type, sandbox.DayHeading)
+  assert.match(renderedText(sandbox.DayHeading({ date: '2026-01-11' })), /2026/)
+})
+
+test('peer card facts group by category and keep values literal', () => {
+  const groups = plain(sandbox.parsePeerCard([
+    'IDENTITY: Name: Fixture Person',
+    'ATTRIBUTE: Reference URL: https://example.com/a:b',
+    'ATTRIBUTE: Prefers short notes',
+    'ATTRIBUTE: Should check this before the trip starts: maybe',
+    'INSTRUCTION: Use the fixture org — git@example.com:fixture/repo.git',
+    'Plain fact without a category.',
+    '',
+    null
+  ]))
+  assert.deepEqual(groups.map(group => group.label), ['Identity', 'Attribute', 'Instruction', null])
+  assert.deepEqual(groups[0].facts[0], { key: 'Name', value: 'Fixture Person', source: 'IDENTITY: Name: Fixture Person' })
+  assert.deepEqual(groups[1].facts.map(fact => [fact.key, fact.value]), [
+    ['Reference URL', 'https://example.com/a:b'],
+    [null, 'Prefers short notes'],
+    [null, 'Should check this before the trip starts: maybe']
+  ])
+  assert.equal(groups[2].facts[0].key, null)
+  assert.equal(groups[2].facts[0].value, 'Use the fixture org — git@example.com:fixture/repo.git')
+  assert.deepEqual(groups[3].facts[0], { key: null, value: 'Plain fact without a category.', source: 'Plain fact without a category.' })
+  for (const value of [null, undefined, 'not a list', {}]) assert.deepEqual(plain(sandbox.parsePeerCard(value)), [])
+})
+
+test('multi-line markdown uses the host chat renderer without resolving media', () => {
+  sandbox.useContext = () => 'wide'
+  const tree = sandbox.Markdown({ source: '## Plan\n\n1. **One**\n\nMEDIA:/tmp/fixture.png' })
+  assert.equal(tree.props['data-selectable-text'], 'true')
+  assert.equal(tree.props.children.type, 'MessageTextContent')
+  assert.equal(tree.props.children.props.media, false, 'a Honcho session can hold turns from other machines')
+  assert.equal(tree.props.children.props.text, '## Plan\n\n1. **One**\n\nMEDIA:/tmp/fixture.png')
+  assert.ok(tree.props.style.maxWidth)
+  assert.equal(sandbox.Markdown({ source: null }).props.children.props.text, '')
+  assert.doesNotMatch(source, /function markdownBlocks|function RichText/)
+})
+
+test('inline records render bold and code without HTML', () => {
+  const inline = sandbox.inlineMarkdown('Use **bold** and `code` here.')
+  assert.deepEqual(plain(inline.map(part => typeof part === 'string' ? part : [part.type, part.props.children])), ['Use ', ['strong', 'bold'], ' and ', ['code', 'code'], ' here.'])
+  assert.equal(sandbox.inlineMarkdown('<script>x</script>'), '<script>x</script>')
+  assert.equal(sandbox.inlineMarkdown(null), '')
+})
+
+test('Hermes continuation chunks are labelled, not shown as raw markers', () => {
+  assert.deepEqual(plain(sandbox.messageBody('[continued] rest of the turn')), { continued: true, body: 'rest of the turn' })
+  assert.deepEqual(plain(sandbox.messageBody('Quoting [continued] mid-sentence')), { continued: false, body: 'Quoting [continued] mid-sentence' })
+  for (const value of [null, undefined, '']) assert.deepEqual(plain(sandbox.messageBody(value)), { continued: false, body: '' })
+})
+
+test('messages group by calendar day in either order and tolerate bad timestamps', () => {
+  const days = plain(sandbox.groupByDay(
+    [{ id: 'c', at: '2026-01-15' }, { id: 'b', at: '2026-01-15' }, { id: 'a', at: '2026-01-14' }, { id: 'z', at: null }],
+    item => item.at
+  ))
+  assert.deepEqual(days.map(day => [day.date, day.items.map(item => item.id)]), [['2026-01-15', ['c', 'b']], ['2026-01-14', ['a']], [null, ['z']]])
+  assert.equal(sandbox.localDay('not a date'), null)
+  assert.equal(sandbox.localDay(null), null)
+  assert.match(sandbox.localDay('2026-01-15T12:00:00Z'), /^2026-01-1[456]$/)
+  assert.equal(sandbox.formatClock('nope'), null)
+})
+
+test('blocking states name the condition and the next step', () => {
+  const base = { routeMismatch: false, ownerProfile: 'research' }
+  const titles = {
+    not_configured: /isn’t set up/, disabled: /turned off/, workspace_missing: /doesn’t exist yet/,
+    session_missing: /isn’t in Honcho yet/, session_unresolved: /No Honcho session/, unreachable: /isn’t responding/,
+  }
+  for (const [state, title] of Object.entries(titles)) {
+    const gate = sandbox.gateFor({ ...base, data: { ok: false, state, profile: 'research', errors: [] } })
+    assert.match(gate.title, title, state)
+  }
+  assert.match(renderedText(sandbox.gateFor({ ...base, data: { ok: false, state: 'not_configured', profile: 'research', errors: [] } }).description), /hermes -p research memory setup honcho/)
+  assert.equal(sandbox.gateFor({ ...base, data: { ok: true, state: 'connected', errors: [], chat: { found: true, honcho_session_id: 's' } } }), null)
+  // A draft arrives as an ok snapshot whose chat has no session at all.
+  const draft = { ...base, data: { ok: true, state: 'partial', errors: [{ scope: 'session', message: 'unresolved' }], chat: { found: null, honcho_session_id: null } } }
+  assert.match(sandbox.gateFor(draft).title, /No Honcho session/)
+  assert.equal(sandbox.connectionStatus(draft).label, 'Not saved yet')
+  const unsaved = { ...base, data: { ok: true, state: 'connected', errors: [], chat: { found: false, honcho_session_id: 'repo-session' } } }
+  assert.match(sandbox.gateFor(unsaved).title, /isn’t in Honcho yet/)
+  assert.equal(sandbox.gateFor({ ...base, isError: true, data: { ok: true } }), null, 'a failed poll keeps showing the last good data')
+  assert.equal(sandbox.connectionStatus({ ...base, data: { ok: true, errors: [{}] } }).label, 'Partial')
+})
+
+test('local multiplexed requests carry their profile in the URL, not just the body', async () => {
+  const calls = useTransport()
+  sandbox.useQuery = options => options
+  for (const profile of ['default', 'research']) {
+    const focus = setLiveFocus({ profile, focusedSessionProfile: profile, connectionId: 'local', focusedSessionOwner: { connectionId: 'local', profile } })
+    for (const endpoint of ['/snapshot', '/messages', '/conclusions', '/context', '/search', '/scopes', '/activity']) {
+      await sandbox.useEndpointForFocus(focus, endpoint).queryFn()
+      const url = new URL(calls.at(-1).path, 'http://fixture')
+      assert.equal(url.pathname, endpoint)
+      assert.equal(url.searchParams.get('profile'), profile)
+      assert.equal(calls.at(-1).options.body.profile, profile)
+    }
+  }
+})
+
+function prepareUploadDialog(transport, mutationState = {}, focusOverrides = {}) {
+  sandbox.transport = transport
+  vm.runInContext('requestPlugin = transport', sandbox)
+  sandbox.TextEncoder = TextEncoder
+  sandbox.useQueryClient = () => ({ invalidateQueries() {} })
+  sandbox.useRef = current => ({ current })
+  sandbox.useEffect = () => {}
+  let stateIndex = 0
+  sandbox.useState = initial => [stateIndex++ === 1 ? 'Fixture upload' : initial, () => {}]
+  let mutation
+  sandbox.useMutation = options => { mutation = options; return { reset() {}, ...mutationState } }
+  setLiveFocus({ profile: 'research', focusedSessionProfile: 'research', connectionId: 'local', focusedSessionOwner: { connectionId: 'local', profile: 'research' }, focusedSessionId: 'fixture-session', focusedStoredSessionId: 'fixture-session', cwd: '/fixture', ...focusOverrides })
+  const tree = sandbox.AddToSessionDialog({ origin: 'test', snapshot: uploadSnapshot })
+  return { tree, mutation }
+}
+
+test('upload ticket and multipart submission retain the same local profile', async () => {
+  const calls = []
+  const { mutation } = prepareUploadDialog(async (path, options) => {
+    calls.push({ path, options })
+    return path.startsWith('/upload-ticket') ? { ok: true, ticket: 'fixture-ticket', target: uploadTarget } : { ok: true }
+  })
+  await mutation.mutationFn()
+  assert.deepEqual(calls.map(call => call.path), ['/upload-ticket?profile=research', '/uploads/fixture-ticket?profile=research'])
+  assert.equal(calls[0].options.body.profile, 'research')
+  assert.equal(new TextDecoder().decode(calls[1].options.upload.bytes), 'Fixture upload')
+})
+
+test('cross-profile uploads go to the chat owner, never the active profile', async () => {
+  const calls = []
+  const { mutation } = prepareUploadDialog(async (path, options) => {
+    calls.push({ path, options })
+    return path.startsWith('/upload-ticket') ? { ok: true, ticket: 'fixture-ticket', target: uploadTarget } : { ok: true }
+  }, {}, { profile: 'default' })
+  await mutation.mutationFn()
+  assert.deepEqual(calls.map(call => call.path), ['/upload-ticket?profile=research', '/uploads/fixture-ticket?profile=research'])
+})
+
+test('remote routing stays host-owned and mismatched focus cannot dispatch', async () => {
+  const calls = useTransport(async () => ({ ok: true }))
+  const focus = setLiveFocus()
+  sandbox.host.profileRoutes = async () => [{ connectionId: 'fixture-ssh', profile: 'remote-alias', targetProfile: 'research' }]
+  sandbox.queryClient = { fetchQuery: options => options.queryFn() }
+  await sandbox.requestForFocus(focus, '/snapshot', {})
+  assert.deepEqual(calls.map(call => call.path), ['/snapshot?profile=research'])
+  await assert.rejects(sandbox.requestForFocus({ ...focus, routeMismatch: true, blockReason: 'other_connection' }, '/snapshot', {}), /another Hermes connection/)
+  assert.equal(calls.length, 1)
+})
+
+test('SSH aliases translate provenance for every read, ticket and multipart call', async () => {
+  const calls = useTransport()
+  sandbox.queryClient = { fetchQuery: options => options.queryFn() }
+  sandbox.host.profileRoutes = async () => [
+    { connectionId: 'local', profile: 'remote-alias', targetProfile: 'wrong-local-profile' },
+    { connectionId: 'fixture-ssh', profile: 'remote-alias', targetProfile: 'research' },
+  ]
+  const focus = setLiveFocus()
+  for (const endpoint of ['/snapshot', '/messages', '/conclusions', '/context', '/search', '/scopes', '/activity', '/upload-ticket', '/uploads/fixture-ticket']) {
+    const upload = { filename: 'notes.txt', contentType: 'text/plain', bytes: new Uint8Array([1]).buffer }
+    await sandbox.requestForFocus(focus, endpoint, { method: 'POST', body: { profile: 'remote-alias', focused_profile: 'remote-alias', connection_id: 'fixture-ssh' }, upload })
+    const call = calls.at(-1)
+    assert.equal(call.path, `${endpoint}?profile=research`)
+    assert.equal(call.options.body.profile, 'research')
+    assert.equal(call.options.body.focused_profile, 'research')
+    assert.equal(call.options.body.connection_id, 'fixture-ssh')
+    assert.equal(call.options.upload, upload)
+  }
+})
+
+test('missing or ambiguous SSH routes never fall back to local transport', async () => {
+  const calls = useTransport()
+  const focus = setLiveFocus()
+  const route = { connectionId: 'fixture-ssh', profile: 'remote-alias', targetProfile: 'research' }
+  for (const routes of [[], [route, route], [{ ...route, targetProfile: '' }]]) {
+    sandbox.host.profileRoutes = async () => routes
+    await assert.rejects(sandbox.requestForFocus(focus, '/snapshot', {}), /route/i)
+  }
+  sandbox.host.profileRoutes = undefined
+  await assert.rejects(sandbox.requestForFocus(focus, '/snapshot', {}), /routing/i)
+  assert.equal(calls.length, 0)
+})
+
+test('SSH target changes cannot retarget confirmed file content', async () => {
+  const calls = useTransport()
+  const focus = { ...setLiveFocus(), backendProfile: 'research' }
+  sandbox.host.profileRoutes = async () => [{ connectionId: 'fixture-ssh', profile: 'remote-alias', targetProfile: 'other-profile' }]
+  await assert.rejects(sandbox.requestForFocus(focus, '/uploads/fixture-ticket', {}), /target changed/i)
+  assert.equal(calls.length, 0)
+})
+
+test('a connection switch during SSH route lookup prevents dispatch', async () => {
+  const calls = useTransport()
+  const focus = setLiveFocus()
+  sandbox.host.profileRoutes = async () => {
+    setLiveFocus({ connectionId: 'local' })
+    return [{ connectionId: 'fixture-ssh', profile: 'remote-alias', targetProfile: 'research' }]
+  }
+  await assert.rejects(sandbox.requestForFocus(focus, '/snapshot', {}), /changed/)
+  assert.equal(calls.length, 0)
+})
+
+test('an owner-profile change during route lookup prevents dispatch', async () => {
+  const calls = useTransport()
+  const focus = setLiveFocus()
+  sandbox.host.profileRoutes = async () => {
+    setLiveFocus({ focusedSessionOwner: { connectionId: 'fixture-ssh', profile: 'different-profile' } })
+    return [{ connectionId: 'fixture-ssh', profile: 'remote-alias', targetProfile: 'research' }]
+  }
+  await assert.rejects(sandbox.requestForFocus(focus, '/snapshot', {}), /changed/)
+  assert.equal(calls.length, 0)
+})
+
+test('confirmed uploads refresh remote routes instead of accepting a cached target', async () => {
+  const focus = { ...setLiveFocus(), backendProfile: 'research' }
+  sandbox.queryClient = { fetchQuery: options => {
+    assert.equal(options.staleTime, 0)
+    return options.queryFn()
+  } }
+  sandbox.host.profileRoutes = async () => [{ connectionId: 'fixture-ssh', profile: 'remote-alias', targetProfile: 'research' }]
+  useTransport()
+  await sandbox.requestForFocus(focus, '/uploads/fixture-ticket', {})
+})
+
+test('detail rows keep labels readable while identifiers stay literal', () => {
+  sandbox.useContext = () => 'wide'
+  const identifier = 'USER_PEER_WITH_UNDERSCORES'
+  const row = sandbox.DetailRow({ label: 'Attributed to', value: identifier, mono: true })
+  assert.equal(renderedText(row.props.children[0]), 'Attributed to')
+  assert.equal(renderedText(row.props.children[1]), identifier)
+  assert.ok(row.props.style.gridTemplateColumns, 'runtime layout must not depend on generated Tailwind classes')
+  assert.equal(row.props.children[1].props.style.overflowWrap, 'anywhere')
+  sandbox.useContext = () => 'narrow'
+  assert.equal(sandbox.DetailRow({ label: 'Peer', value: 'x' }).props.style.gridTemplateColumns, '6.5rem minmax(0, 1fr)')
+})
+
+test('search submits only on a real Enter, never during IME composition', () => {
+  let runs = 0
+  const onKeyDown = sandbox.submitOnEnter(() => runs++)
+  const event = extra => ({ preventDefault() {}, nativeEvent: {}, ...extra })
+  onKeyDown(event({ key: 'a' }))
+  onKeyDown(event({ key: 'Enter', nativeEvent: { isComposing: true } }))
+  assert.equal(runs, 0)
+  onKeyDown(event({ key: 'Enter' }))
+  assert.equal(runs, 1)
+})
+
+test('refresh invalidates visible reads only for the current focus', () => {
+  const calls = []
+  const focusKey = ['default', 'local', 'default', 'local', 'session', 'runtime', '/fixture']
+  sandbox.refreshFocus({ invalidateQueries: filter => calls.push(filter) }, focusKey)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].predicate({ queryKey: ['hermes-honcho-plugin', '/messages', ...focusKey, 1] }), true)
+  assert.equal(calls[0].predicate({ queryKey: ['hermes-honcho-plugin', '/messages', 'research'] }), false)
+  assert.equal(calls[0].predicate({ queryKey: ['other-plugin', '/messages', ...focusKey] }), false)
+})
+
+test('partial endpoint results display diagnostics without discarding readable content', () => {
+  const child = element('p', { children: 'Available fixture content' })
+  const tree = sandbox.QueryState({ query: { data: { ok: true, errors: [{ scope: 'fixture', message: 'One layer unavailable' }] } }, children: child })
+  assert.notEqual(tree, child)
+  assert.ok(tree.props.children.includes(child))
+  assert.ok(tree.props.children.some(node => node?.type === sandbox.Diagnostics))
+})
+
+test('upload transport loss is unknown, with retries explicitly disabled', async () => {
+  const { mutation } = prepareUploadDialog(async path => {
+    if (path.startsWith('/upload-ticket')) return { ok: true, ticket: 'fixture-ticket', target: uploadTarget }
+    throw new Error('Fixture connection lost')
+  })
+  assert.equal(mutation.retry, false)
+  await assert.rejects(mutation.mutationFn(), error => {
+    assert.equal(error.uploadState, 'outcome_unknown')
+    assert.equal(error.committed, null)
+    assert.match(error.message, /Messages before trying again/)
+    return true
+  })
+})
+
+test('pending upload cannot be dismissed or reset', () => {
+  let resets = 0
+  const { tree } = prepareUploadDialog(async () => ({}), { isPending: true, reset() { resets++ } })
+  tree.props.onOpenChange(false)
+  assert.equal(resets, 0, 'closing must not erase the in-flight submission guard')
+})
+
+test('upload dismissal guard takes effect before React Query rerenders', async () => {
+  let resets = 0
+  let release
+  const waiting = new Promise(resolve => { release = resolve })
+  const { tree, mutation } = prepareUploadDialog(async path => {
+    if (path.startsWith('/upload-ticket')) return { ok: true, ticket: 'fixture-ticket', target: uploadTarget }
+    return waiting
+  }, { isPending: false, reset() { resets++ } })
+  const pending = mutation.mutationFn()
+  tree.props.onOpenChange(false)
+  release({ ok: true })
+  await pending
+  assert.equal(resets, 0)
+})
+
+test('ticket must match the session and peer shown when the user confirmed', async () => {
+  for (const field of ['workspace_id', 'session_id', 'peer_id']) {
+    const calls = []
+    const { mutation } = prepareUploadDialog(async path => {
+      calls.push(path)
+      return { ok: true, ticket: 'fixture-ticket', target: { ...uploadTarget, [field]: 'changed-target' } }
+    })
+    await assert.rejects(mutation.mutationFn(), /target changed/)
+    assert.equal(calls.length, 1, 'mismatched ticket must not dispatch file content')
+  }
+})

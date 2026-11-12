@@ -1,0 +1,13 @@
+{
+  "source": "https://raw.githubusercontent.com/decolua/9router/refs/heads/master/skills/9router/SKILL.md",
+  "source_url": "https://raw.githubusercontent.com/decolua/9router/refs/heads/master/skills/9router/SKILL.md",
+  "bundle_hash": "sha256:4804a5bebd175bd1bdb3eca30abd73b4d9fabbfc609ae94bd9b72b51904de4e8",
+  "scanner_version": "skills-guard-v1",
+  "verdict": "safe",
+  "trust_level": "community",
+  "findings": [],
+  "rules": [],
+  "scanned_at": "2026-08-24T12:12:04.886597+00:00",
+  "summary": "nine-router: clean scan, no threats detected",
+  "fresh": true
+}

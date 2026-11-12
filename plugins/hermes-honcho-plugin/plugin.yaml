@@ -1,0 +1,8 @@
+manifest_version: 1
+name: hermes-honcho-plugin
+version: 0.5.0
+description: Read, search, question, and correct the Honcho memory behind the focused Hermes Desktop chat.
+author: outpoints
+homepage: https://github.com/outpoints/hermes-honcho-plugin
+license: GPL-3.0
+kind: standalone

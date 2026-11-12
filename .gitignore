@@ -1,23 +1,58 @@
-# ~/.hermes — estado do Hermes (referência se usar git no futuro)
-# Alinhado a profile-distributions + hermes-runtime-maintenance (Tijolão)
+# ~/.hermes — política: versionar a árvore por padrão; negar só o que não pode ir ao GitHub público.
+# Motivos: segredo | cache regenerável | sqlite/sessão | arquivo grande demais para o GitHub | runtime efêmero
 
-# Segredos
+# --- Segredo ---
 .env
 .env.*
+!.env.example
 auth.json
 auth.lock
-shared/nous_auth.json
-shared/nous_auth.lock
+**/nous_auth.json
+**/nous_auth.lock
 vault/
 mcp-tokens/
+credentials/
+**/credentials/
+*credentials.json
+*.pem
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+.ssh/
+home/
 
-# Bancos SQLite
+# --- SQLite / sessão / estado de conversa ---
 *.db
 *.db-shm
 *.db-wal
+*.db.dispatch.lock
+*.db.init.lock
+shared-state.db*
+response_store.db*
+runs_idempotency.db*
+projects.db*
+verification_evidence.db*
+state.db*
 
-# Gateway / locks / runtime efêmero na raiz
-*.lock
+# --- Cache regenerável ---
+cache/
+.cache/
+.curator_backups/
+audio_cache/
+image_cache/
+installs/
+tools/
+models_dev_cache.json
+models_dev_cache.etag
+provider_models_cache.json
+context_length_cache.yaml
+plugin-update-checks/
+
+# --- Runtime / locks / sockets (efêmero) ---
+*.sock
+*.wal
+*.shm
 *.pid
 gateway.sock
 gateway.pid
@@ -26,10 +61,6 @@ gateway_state.json
 gateway-starts.log
 spawn-ledger.json
 channel_directory.json
-provider_models_cache.json
-models_dev_cache.json
-models_dev_cache.etag
-context_length_cache.yaml
 .hermes_history
 .mcp-discovery.lock
 .scratch_tip_shown
@@ -39,17 +70,14 @@ interrupt_debug.log
 .skills_prompt_snapshot.json
 telegram_update_receipts_*.json
 tasks.json
-
-# Logs e caches
-logs/
-cache/
-.curator_backups/
-audio_cache/
-image_cache/
-.cache/
-*.log
-
-# Sessões e runtime
+honcho.json
+.update_check
+tui-theme-boot.json
+web-ui-build-stamp.json
+shell-hooks-allowlist.json
+processes.json
+memories/*.lock
+plugins/.install-metadata.json.lock
 sessions/
 runtime/
 pending/
@@ -58,71 +86,52 @@ sandboxes/
 pairing/
 proxy/
 platforms/
-
-# Backups locais (manter no disco, não no git)
+terminal-sessions/
+cron/
+state/
+kanban/
+workspace/
 backups/
 state-snapshots/
-
-# Infra Hermes (reinstalável / estado de processo)
-installs/
-plugins/
-desktop-plugins/
-plugin-update-checks/
-bin/
-tools/
-home/
+logs/
+attachments/
+composer-pastes/
+disk-cleanup/
+plugin-data/
 telemetry/
-hooks/
-photon/
 pets/
 pastes/
 images/
 assets/
 skins/
-desktop/
-gateway/
+photon/
 webui-mvp/
-terminal-sessions/
+bin/
+gateway/
+desktop/
+pending_messages/
 
-# Kanban workspace interno
-kanban/
-kanban.db*
-workspace/
+# Skills — estado interno do hub/curator (fonte das skills é versionável)
+skills/**/.curator_backups/
+skills/**/.locks/
+skills/.usage.json
+skills/.usage.json.lock
+skills/**/.bundled_manifest*
+skills/**/.curator_ledger.jsonl
+skills/**/.curator_state
 
-# Skills — bundled do Hermes (reinstalável); versionar só custom Tijolão
-skills/*
-!skills/devops/
-!skills/devops/**
+# Plugins — não publicar .env aninhado nem metadados .git (evitar gitlink/submódulo)
+plugins/**/.env
+plugins/**/.env.*
+!plugins/**/.env.example
+desktop-plugins/**/.env
+desktop-plugins/**/.env.*
+**/.git/
 
-# Runtime / estado de processo
-state/
-cron/
-.update_check
-tui-theme-boot.json
-web-ui-build-stamp.json
-shell-hooks-allowlist.json
-processes.json
-
-# Criados pelo Hermes Desktop e plugins (nov/2026)
-attachments/
-composer-pastes/
-disk-cleanup/
-honcho.json
-
-# Misc DBs
-shared-state.db
-response_store.db*
-runs_idempotency.db*
-projects.db
-verification_evidence.db*
-
-# Editor
-.DS_Store
-*~
-
-# Privado (não publicar — memória clínica/pessoal)
-memories/
+# Privado / clínico (fora do ULTRON público)
 profiles/
 
-# Versionável (repo público ULTRON)
-# config.yaml, SOUL.md, plans/, scripts/, skills/ (custom)
+# Editor / lixo
+.DS_Store
+*~
+.cursor/

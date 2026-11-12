@@ -1,0 +1,25 @@
+{
+  "bundle_hash": "sha256:481c6e7d37f30d966e10dc84b46aad96f98c1024e7f6394ac174fec1756eff86",
+  "scanner_version": "skills-guard-v2",
+  "source": "https://raw.githubusercontent.com/doutortenente/i-have-adhd-fork/main/skills/i-have-adhd/SKILL.md",
+  "source_url": "https://raw.githubusercontent.com/doutortenente/i-have-adhd-fork/main/skills/i-have-adhd/SKILL.md",
+  "verdict": "safe",
+  "trust_level": "community",
+  "findings": [
+    {
+      "pattern_id": "unpinned_npm_install",
+      "severity": "medium",
+      "category": "supply_chain",
+      "file": "SKILL.md",
+      "line": 38,
+      "match": "Good: \"Run `npm install jsonwebtoken`, then edit `src/auth.ts:42`.\"",
+      "description": "npm install without version pinning"
+    }
+  ],
+  "rules": [
+    "unpinned_npm_install"
+  ],
+  "scanned_at": "2026-09-11T14:14:34.014311+00:00",
+  "summary": "i-have-adhd: safe \u2014 1 finding(s) in supply_chain",
+  "fresh": true
+}
