@@ -25,10 +25,9 @@ id_ed25519.*
 
 # Runtime databases & state
 *.db
-*.db-shm
-*.db-wal
-*.db.dispatch.lock
-*.db.init.lock
+*.db-*
+*.db.*
+*.lock
 gateway.pid
 gateway.lock
 gateway.sock
