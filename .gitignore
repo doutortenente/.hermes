@@ -97,6 +97,7 @@ interrupt_debug.log
 # Distribution-authored scheduler/skills state only
 cron/*
 !cron/jobs.json
+skills/.hub/
 skills/.*
 skills/**/.curator_backups/
 skills/**/.locks/
