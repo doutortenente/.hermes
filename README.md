@@ -1,9 +1,20 @@
 # ULTRON / Hermes home
 
-Pasta de **runtime** do [Hermes Agent](https://github.com/nousresearch/hermes-agent) (estado vivo + config).
+Pasta de **runtime** do [Hermes Agent](https://github.com/nousresearch/hermes-agent) (estado vivo + config), espelhada aqui como subset versionável.
 
-- **Operação ULTRON (início → fim):** [plans/ULTRON-OPERACIONAL.md](plans/ULTRON-OPERACIONAL.md)
-- **Mapa completo:** [plans/MAPA-HERMES-HOME.md](plans/MAPA-HERMES-HOME.md)
-- **Repo público (subset versionável):** [plans/REPO-ULTRON-HERMES.md](plans/REPO-ULTRON-HERMES.md)
+## O que vive neste repo
 
-Não trate a raiz como “projeto Git” — dezenas de arquivos soltos (`*.db`, `gateway.*`, caches) são **oficiais** e não devem ser movidos.
+| Arquivo/pasta | Papel |
+|---------------|-------|
+| `config.yaml` | Config do agente: modelo (9Router local), fallbacks, MCP servers, toolsets, memory, skills |
+| `SOUL.md` | Identidade e postura do assistente (slot #1 do system prompt) |
+| `skills/` | Skills instaladas, organizadas por categoria |
+| `.env.example` | Nomes das variáveis que o `config.yaml` referencia — valores só no `.env` real (gitignored) |
+
+## O que NÃO vive neste repo
+
+A raiz real (`~/.hermes`) contém dezenas de arquivos oficiais de runtime (`state.db`, `gateway.*`, caches, `memories/`, `sessions/`, `logs/`, plugins locais) que são **ignorados pelo Git de propósito** — ver `.gitignore`, que segue o template oficial de [profile distributions](https://hermes-agent.nousresearch.com/docs/user-guide/profile-distributions). Não trate a raiz como "projeto Git" e não mova esses arquivos.
+
+- Skills arquivadas ficam em `skills/.archive/` (o loader não as carrega).
+- Estado do Skills Hub (`skills/.hub/`) é artefato gerado — nunca versionado.
+- Config é editado via `hermes config set`, não à mão (refs `${ENV_VAR}` são preservadas).
