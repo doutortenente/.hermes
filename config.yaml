@@ -7,15 +7,15 @@ model:
 providers:
   nine-router:
     name: 9Router
-    api: http://127.0.0.1:20128/v1
-    key_env: NINEROUTER_KEY
+    base_url: http://127.0.0.1:20128/v1
+    api_key: ${NINEROUTER_KEY}
     transport: chat_completions
     default_model: gcli/grok-4.7
     discover_models: true
   poolside:
     name: Poolside
-    api: https://inference.poolside.ai/v1
-    key_env: POOLSIDE_API_KEY
+    base_url: https://inference.poolside.ai/v1
+    api_key: ${POOLSIDE_API_KEY}
     transport: chat_completions
     default_model: poolside/laguna-s-2.1
     models:
@@ -148,15 +148,12 @@ skills:
     - imessage
     - llama-cpp
     - manim-video
-    - nine-router
     - openhue
     - p5js
     - popular-web-designs
     - pretext
     - product-price-monitor
     - research-paper-writing
-    - sasi-cockpit-pipeline
-    - sasi-schema-planning
     - sdlc-review
     - serving-llms-vllm
     - sketch

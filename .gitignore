@@ -8,6 +8,7 @@ auth.json
 .env
 .env.*
 !.env.example
+remote-access.env
 auth.lock
 **/nous_auth.json
 **/nous_auth.lock
@@ -16,6 +17,12 @@ mcp-tokens/
 credentials/
 **/credentials/
 *credentials.json
+google_token.json
+google_oauth.json
+google_oauth_pending.json
+oauth_creds.json
+bws_cache.json
+op_cache.json
 *.pem
 id_rsa
 id_rsa.*
@@ -97,6 +104,7 @@ interrupt_debug.log
 # Distribution-authored scheduler/skills state only
 cron/*
 !cron/jobs.json
+skills/.hub/
 skills/.*
 skills/**/.curator_backups/
 skills/**/.locks/
